@@ -6,7 +6,7 @@
 #include "binaryninjaapi.h"
 #include "il.h"
 extern "C" {
-    #include "xedInc/xed-interface.h"
+    #include "xed-interface.h"
 }
 #include "arch_x86_common_architecture.h"
 
@@ -216,6 +216,61 @@ static const char* GetRelocationString(PeRelocationType relocType)
 }
 
 
+static const char* GetRelocationString(COFFx86RelocationType relocType)
+{
+	static const char* relocTable[] =
+	{
+		"PE_IMAGE_REL_I386_ABSOLUTE",
+		"PE_IMAGE_REL_I386_DIR16",
+		"PE_IMAGE_REL_I386_REL16",
+		"", "", "",
+		"PE_IMAGE_REL_I386_DIR32",
+		"PE_IMAGE_REL_I386_DIR32NB",
+		"",
+		"PE_IMAGE_REL_I386_SEG12",
+		"PE_IMAGE_REL_I386_SECTION",
+		"PE_IMAGE_REL_I386_SECREL",
+		"PE_IMAGE_REL_I386_TOKEN",
+		"PE_IMAGE_REL_I386_SECREL7",
+		"", "", "", "", "", "",
+		"PE_IMAGE_REL_I386_REL32",
+	};
+
+	if (relocType < MAX_PE_X86_RELOCATION)
+		return relocTable[relocType];
+	return "Unknown x86 relocation";
+}
+
+
+static const char* GetRelocationString(COFFx64RelocationType relocType)
+{
+	static const char* relocTable[] =
+	{
+		"PE_IMAGE_REL_AMD64_ABSOLUTE",
+		"PE_IMAGE_REL_AMD64_ADDR64",
+		"PE_IMAGE_REL_AMD64_ADDR32",
+		"PE_IMAGE_REL_AMD64_ADDR32NB",
+		"PE_IMAGE_REL_AMD64_REL32",
+		"PE_IMAGE_REL_AMD64_REL32_1",
+		"PE_IMAGE_REL_AMD64_REL32_2",
+		"PE_IMAGE_REL_AMD64_REL32_3",
+		"PE_IMAGE_REL_AMD64_REL32_4",
+		"PE_IMAGE_REL_AMD64_REL32_5",
+		"PE_IMAGE_REL_AMD64_SECTION",
+		"PE_IMAGE_REL_AMD64_SECREL",
+		"PE_IMAGE_REL_AMD64_SECREL7",
+		"PE_IMAGE_REL_AMD64_TOKEN",
+		"PE_IMAGE_REL_AMD64_SREL32",
+		"PE_IMAGE_REL_AMD64_PAIR",
+		"PE_IMAGE_REL_AMD64_SSPAN32",
+	};
+
+	if (relocType < MAX_PE_X64_RELOCATION)
+		return relocTable[relocType];
+	return "Unknown x86_64 relocation";
+}
+
+
 static const char* GetRelocationString(Elfx86RelocationType relocType)
 {
 	static const char* relocTable[] =
@@ -354,53 +409,6 @@ static const char* GetRelocationString(Machox64RelocationType relocType)
 	return "Unknown x64 relocation";
 }
 
-// static const char* GetRelocationString(COFFx86RelocationType relocType)
-// {
-// 	static const char* relocTable[] =
-// 	{
-// 		"PE_IMAGE_REL_I386_ABSOLUTE",
-// 		"PE_IMAGE_REL_I386_DIR16",
-// 		"PE_IMAGE_REL_I386_REL16",
-// 		"PE_IMAGE_REL_I386_DIR32",
-// 		"PE_IMAGE_REL_I386_DIR32NB",
-// 		"PE_IMAGE_REL_I386_SEG12",
-// 		"PE_IMAGE_REL_I386_SECTION",
-// 		"PE_IMAGE_REL_I386_SECREL",
-// 		"PE_IMAGE_REL_I386_TOKEN",
-// 		"PE_IMAGE_REL_I386_SECREL7",
-// 		"PE_IMAGE_REL_I386_REL32"
-// 	};
-// 	if (relocType < MAX_PE_X86_RELOCATION)
-// 		return relocTable[relocType];
-// 	return "Unknown x86 relocation";
-// }
-
-// static const char* GetRelocationString(COFFx64RelocationType relocType)
-// {
-// 	static const char* relocTable[] =
-// 	{
-// 		"PE_IMAGE_REL_AMD64_ABSOLUTE",
-// 		"PE_IMAGE_REL_AMD64_ADDR64",
-// 		"PE_IMAGE_REL_AMD64_ADDR32",
-// 		"PE_IMAGE_REL_AMD64_ADDR32NB",
-// 		"PE_IMAGE_REL_AMD64_REL32",
-// 		"PE_IMAGE_REL_AMD64_REL32_1",
-// 		"PE_IMAGE_REL_AMD64_REL32_2",
-// 		"PE_IMAGE_REL_AMD64_REL32_3",
-// 		"PE_IMAGE_REL_AMD64_REL32_4",
-// 		"PE_IMAGE_REL_AMD64_REL32_5",
-// 		"PE_IMAGE_REL_AMD64_SECTION",
-// 		"PE_IMAGE_REL_AMD64_SECREL",
-// 		"PE_IMAGE_REL_AMD64_SECREL7",
-// 		"PE_IMAGE_REL_AMD64_TOKEN",
-// 		"PE_IMAGE_REL_AMD64_SREL32",
-// 		"PE_IMAGE_REL_AMD64_PAIR",
-// 		"PE_IMAGE_REL_AMD64_SSPAN32"
-// 	};
-// 	if (relocType < MAX_PE_X64_RELOCATION)
-// 		return relocTable[relocType];
-// 	return "Unknown x86_64 relocation";
-// }
 
 bool X86CommonArchitecture::Decode(const uint8_t* data, size_t len, xed_decoded_inst_t* xedd)
 {
@@ -440,7 +448,7 @@ void X86CommonArchitecture::SetInstructionInfoForInstruction(uint64_t addr, Inst
 	const uint64_t               abs_br = xed_decoded_inst_get_branch_displacement(xedd) + addr + xed_decoded_inst_get_length(xedd);
 	const xed_iform_enum_t   xedd_iForm = xed_decoded_inst_get_iform_enum(xedd);
 	const xed_iclass_enum_t xedd_iClass = xed_decoded_inst_get_iclass(xedd);
-
+	const uint64_t         immediateOne = xed_decoded_inst_get_unsigned_immediate(xedd);
 	// 1. First parse 'generally', by instruction category, then
 	// 2. break down to special cases and impliment iclass and possibly iform-specific cases
 
@@ -467,7 +475,7 @@ void X86CommonArchitecture::SetInstructionInfoForInstruction(uint64_t addr, Inst
 	case XED_CATEGORY_INTERRUPT:
 		if (xed_decoded_inst_get_unsigned_immediate(xedd) == 0x80)
 			result.AddBranch(SystemCall);
-		else if (xedd_iClass == XED_ICLASS_INT3)
+		else if (xedd_iClass == XED_ICLASS_INT3 || (xedd_iClass == XED_ICLASS_INT && immediateOne == 0x29))
 			result.AddBranch(ExceptionBranch);
 		break;
 
@@ -1112,9 +1120,6 @@ void X86CommonArchitecture::GetOperandTextBNIntel(const xed_decoded_inst_t* cons
 				continue;
 		}
 
-		if ((xed_operand_operand_visibility(op) == XED_OPVIS_IMPLICIT) && (xed_decoded_inst_get_reg(xedd, op_name) == XED_REG_ST0))
-			continue;
-
 		switch(op_name)
 		{
 		case XED_OPERAND_REG0:
@@ -1456,8 +1461,7 @@ void X86CommonArchitecture::GetOperandTextBNIntel(const xed_decoded_inst_t* cons
 		// If there is another operand and it is visable, print delimiter
 		if ((opIndex != xed_inst_noperands(xi)-1) &&
 			((xed_operand_operand_visibility(xed_inst_operand(xi, opIndex+1)) == XED_OPVIS_EXPLICIT) ||
-				((xed_operand_operand_visibility(xed_inst_operand(xi, opIndex+1)) == XED_OPVIS_IMPLICIT) &&
-				(xed_decoded_inst_get_reg(xedd, xed_operand_name(xed_inst_operand(xi, opIndex+1))) != XED_REG_ST0))))
+				(xed_operand_operand_visibility(xed_inst_operand(xi, opIndex+1)) == XED_OPVIS_IMPLICIT)))
 				result.emplace_back(OperandSeparatorToken, m_disassembly_options.separator);
 	}
 
@@ -2099,11 +2103,15 @@ size_t X86CommonArchitecture::GetFlagWriteLowLevelIL(BNLowLevelILOperation op, s
 		}
 		break;
 	case LLIL_XOR:
+	case LLIL_AND:
+	case LLIL_OR:
 		switch (flag)
 		{
 		case IL_FLAG_C:
 		case IL_FLAG_O:
 			return il.Const(0, 0);
+		case IL_FLAG_A:
+			return il.Undefined();
 		}
 		break;
 	case LLIL_MULU_DP:
@@ -2198,7 +2206,7 @@ string X86CommonArchitecture::GetFlagName(uint32_t flag)
 	case IL_FLAG_C3:
 		return "c3";
 	default:
-		sprintf(result, "flag%" PRIu32, flag);
+		snprintf(result, sizeof(result), "flag%" PRIu32, flag);
 		return result;
 	}
 }
@@ -2532,7 +2540,7 @@ bool X86CommonArchitecture::Assemble(const string& code, uint64_t addr, DataBuff
 		finalCode = "\tsection .text align=1\n\tbits 64\n";
 
 	char orgStr[32];
-	sprintf(orgStr, "\torg 0x%" PRIx64 "\n", addr);
+	snprintf(orgStr, sizeof(orgStr), "\torg 0x%" PRIx64 "\n", addr);
 	finalCode += orgStr;
 
 	finalCode += "%line 0 input\n";
@@ -3726,6 +3734,11 @@ public:
 	{
 		return vector<uint32_t>{ XED_REG_ECX, XED_REG_EDX };
 	}
+
+	virtual bool IsStackAdjustedOnReturn() override
+	{
+		return true;
+	}
 };
 
 
@@ -3739,6 +3752,11 @@ public:
 	virtual vector<uint32_t> GetIntegerArgumentRegisters() override
 	{
 		return vector<uint32_t>{ XED_REG_ECX };
+	}
+
+	virtual bool IsStackAdjustedOnReturn() override
+	{
+		return true;
 	}
 };
 
@@ -4407,6 +4425,183 @@ public:
 	}
 };
 
+class CoffRelocationHandler: public RelocationHandler
+{
+public:
+	virtual bool ApplyRelocation(Ref<BinaryView> view, Ref<Architecture> arch, Ref<Relocation> reloc, uint8_t* dest, size_t len) override
+	{
+		// Note: info.base contains preferred base address and the base where the image is actually loaded
+		(void)view;
+		(void)arch;
+		(void)len;
+		uint64_t* data64 = (uint64_t*)dest;
+		uint32_t* data32 = (uint32_t*)dest;
+		uint16_t* data16 = (uint16_t*)dest;
+		auto info = reloc->GetInfo();
+		uint64_t offset = 0;
+
+		if (info.pcRelative)
+		{
+			int64_t relative_offset = info.target - info.address;
+			offset = (uint64_t) relative_offset;
+		}
+		else
+			offset = info.target;
+
+		if (! info.implicitAddend && info.addend)
+			offset += info.addend;
+
+		if (! info.baseRelative)
+			offset -= info.base;
+
+		switch (info.nativeType)
+		{
+		// case PE_IMAGE_REL_I386_SECTION:
+		case PE_IMAGE_REL_AMD64_SECTION:
+			// TODO: test this implementation, but for now, just don't warn about it
+			data16[0] = info.sectionIndex + 1;
+			break;
+		// case PE_IMAGE_REL_I386_SECREL:
+		case PE_IMAGE_REL_AMD64_SECREL:
+		{
+			// TODO: test this implementation, but for now, just don't warn about it
+			auto sections = view->GetSectionsAt(info.target);
+			if (sections.size() > 0)
+			{
+				data32[0] = info.target - sections[0]->GetStart();
+			}
+			break;
+		}
+		default:
+			if (info.size == 8)
+			{
+				// LogDebug("%s: address: %#" PRIx64 " target: %#" PRIx64 " base: %#" PRIx64 " offset: %#" PRIx64 " current: %#" PRIx64 " result: %#" PRIx64 "", __func__, info.address, info.target, info.base, offset, data64[0], data64[0] + offset);
+				data64[0] += offset;
+			}
+			else if (info.size == 4)
+			{
+				// LogDebug("%s: address: %#" PRIx64 " target: %#" PRIx64 " base: %#" PRIx64 " offset: %#" PRIx32 " %+" PRId32 " current: %#" PRIx32 " result: %#" PRIx32 "", __func__, info.address, info.target, info.base, (uint32_t)offset, (uint32_t)offset, data32[0], data32[0] + (uint32_t)offset);
+				data32[0] += (uint32_t)offset;
+			}
+		}
+		return true;
+	}
+
+	virtual bool GetRelocationInfo(Ref<BinaryView> view, Ref<Architecture> arch, vector<BNRelocationInfo>& result) override
+	{
+		(void)view; (void)arch;
+		set<uint64_t> relocTypes;
+		for (auto& reloc : result)
+		{
+			if (arch->GetName() == "x86_64")
+			{
+				switch (reloc.nativeType)
+				{
+				case PE_IMAGE_REL_AMD64_ABSOLUTE:
+					reloc.type = IgnoredRelocation;
+					break;
+				case PE_IMAGE_REL_AMD64_ADDR64:
+					reloc.baseRelative = true;
+					reloc.size = 8;
+					break;
+				case PE_IMAGE_REL_AMD64_ADDR32NB:
+					reloc.baseRelative = false;
+					reloc.size = 4;
+					break;
+				case PE_IMAGE_REL_AMD64_ADDR32:
+					reloc.baseRelative = true;
+					reloc.size = 4;
+					break;
+				case PE_IMAGE_REL_AMD64_REL32_5:
+				case PE_IMAGE_REL_AMD64_REL32_4:
+				case PE_IMAGE_REL_AMD64_REL32_3:
+				case PE_IMAGE_REL_AMD64_REL32_2:
+				case PE_IMAGE_REL_AMD64_REL32_1:
+					// LogDebug("%s: %#" PRIx64 "(%#" PRIx64 ")->%#" PRIx64 " %s addend: %ld", __func__, reloc.address, reloc.target, reloc.address - reloc.target, GetRelocationString((COFFx64RelocationType)reloc.nativeType), (long) reloc.addend);
+				case PE_IMAGE_REL_AMD64_REL32:
+					// TODO: treat reloc.addend as offset of target from its section (see llvm/lib/ExecutionEngine/RuntimeDyld/Targets/RuntimeDyldCOFFX86_64.h:67)
+					reloc.addend = -(4 + (reloc.nativeType - PE_IMAGE_REL_AMD64_REL32));
+					reloc.baseRelative = false;
+					reloc.pcRelative = true;
+					reloc.size = 4;
+					break;
+				case PE_IMAGE_REL_AMD64_SECTION:
+					// The 16-bit section index of the section that contains the target. This is used to support debugging information.
+					reloc.baseRelative = false;
+					reloc.size = 2;
+					reloc.addend = 0;
+				case PE_IMAGE_REL_AMD64_SECREL:
+					// TODO: implement these, but for now, just don't warn about them
+					// The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.				reloc.baseRelative = false;
+					reloc.baseRelative = false;
+					reloc.size = 4;
+					reloc.addend = 0;
+					break;
+				case PE_IMAGE_REL_AMD64_SECREL7:
+					// 7-bit offset from the base of the section that contains the target
+				case PE_IMAGE_REL_AMD64_TOKEN:
+				case PE_IMAGE_REL_AMD64_SREL32:
+				case PE_IMAGE_REL_AMD64_PAIR:
+				case PE_IMAGE_REL_AMD64_SSPAN32:
+				default:
+					// By default, PE relocations are correct when not rebased.
+					// Upon rebasing, support would need to be added to correctly process the relocation
+					reloc.type = UnhandledRelocation;
+					relocTypes.insert(reloc.nativeType);
+				}
+				for (auto& reloc : relocTypes)
+					LogWarn("Unsupported COFF relocation: %s", GetRelocationString((COFFx64RelocationType)reloc));
+			}
+			else if (arch->GetName() == "x86")
+			{
+				switch (reloc.nativeType)
+				{
+				case PE_IMAGE_REL_I386_ABSOLUTE:
+					reloc.type = IgnoredRelocation;
+					break;
+				case PE_IMAGE_REL_I386_REL32:
+					reloc.baseRelative = false;
+					reloc.pcRelative = true;
+					reloc.size = 4;
+					reloc.addend = -4;
+					break;
+				case PE_IMAGE_REL_I386_DIR32NB:
+					reloc.baseRelative = false;
+					reloc.size = 4;
+					break;
+				case PE_IMAGE_REL_I386_DIR32:
+					reloc.baseRelative = true;
+					reloc.size = 4;
+					break;
+				case PE_IMAGE_REL_I386_SECTION:
+					// The 16-bit section index of the section that contains the target. This is used to support debugging information.
+					reloc.baseRelative = false;
+					reloc.size = 2;
+					reloc.addend = 0;
+				case PE_IMAGE_REL_I386_SECREL:
+					// The 32-bit offset of the target from the beginning of its section. This is used to support debugging information and static thread local storage.				reloc.baseRelative = false;
+					reloc.baseRelative = false;
+					reloc.size = 4;
+					reloc.addend = 0;
+					break;
+				case PE_IMAGE_REL_I386_SEG12:
+				case PE_IMAGE_REL_I386_TOKEN:
+				case PE_IMAGE_REL_I386_SECREL7:
+				case PE_IMAGE_REL_I386_DIR16:
+				case PE_IMAGE_REL_I386_REL16:
+				default:
+					reloc.type = UnhandledRelocation;
+					relocTypes.insert(reloc.nativeType);
+				}
+				for (auto& reloc : relocTypes)
+					LogWarn("Unsupported COFF relocation: %s", GetRelocationString((COFFx86RelocationType)reloc));
+			}
+		}
+
+		return true;
+	}
+};
+
 class PeRelocationHandler: public RelocationHandler
 {
 public:
@@ -4535,6 +4730,15 @@ extern "C"
 {
 	BN_DECLARE_CORE_ABI_VERSION
 
+#ifndef DEMO_VERSION
+	BINARYNINJAPLUGIN void CorePluginDependencies()
+	{
+		AddOptionalPluginDependency("view_elf");
+		AddOptionalPluginDependency("view_macho");
+		AddOptionalPluginDependency("view_pe");
+	}
+#endif
+
 #ifdef DEMO_VERSION
 	bool X86PluginInit()
 #else
@@ -4545,6 +4749,7 @@ extern "C"
 
 		// XED Setup
 		xed_tables_init();
+		X86CommonArchitecture::InitializeCachedTypes();
 
 		// Register the architectures in the global list of available architectures
 		Architecture* x16 = new X16Architecture();
@@ -4576,6 +4781,7 @@ extern "C"
 
 		x86->RegisterRelocationHandler("Mach-O", new x86MachoRelocationHandler());
 		x86->RegisterRelocationHandler("ELF", new x86ElfRelocationHandler());
+		x86->RegisterRelocationHandler("COFF", new CoffRelocationHandler());
 		x86->RegisterRelocationHandler("PE", new PeRelocationHandler());
 
 		conv = new X64SystemVCallingConvention(x64);
@@ -4591,21 +4797,20 @@ extern "C"
 
 		x64->RegisterRelocationHandler("Mach-O", new x64MachoRelocationHandler());
 		x64->RegisterRelocationHandler("ELF", new x64ElfRelocationHandler());
+		x64->RegisterRelocationHandler("COFF", new CoffRelocationHandler());
 		x64->RegisterRelocationHandler("PE", new PeRelocationHandler());
 
 		// Register the architectures with the binary format parsers so that they know when to use
 		// these architectures for disassembling an executable file
 		BinaryViewType::RegisterArchitecture("ELF", 3, LittleEndian, x86);
+		BinaryViewType::RegisterArchitecture("COFF", 0x14c, LittleEndian, x86);
 		BinaryViewType::RegisterArchitecture("PE", 0x14c, LittleEndian, x86);
 		BinaryViewType::RegisterArchitecture("Mach-O", 0x00000007, LittleEndian, x86);
-		x86->SetBinaryViewTypeConstant("ELF", "R_COPY", 5);
-		x86->SetBinaryViewTypeConstant("ELF", "R_JUMP_SLOT", 7);
 
 		BinaryViewType::RegisterArchitecture("ELF", 62, LittleEndian, x64);
+		BinaryViewType::RegisterArchitecture("COFF", 0x8664, LittleEndian, x64);
 		BinaryViewType::RegisterArchitecture("PE", 0x8664, LittleEndian, x64);
 		BinaryViewType::RegisterArchitecture("Mach-O", 0x01000007, LittleEndian, x64);
-		x64->SetBinaryViewTypeConstant("ELF", "R_COPY", 5);
-		x64->SetBinaryViewTypeConstant("ELF", "R_JUMP_SLOT", 7);
 
 		return true;
 	}

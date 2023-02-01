@@ -6,10 +6,9 @@
 #include "binaryninjaapi.h"
 #include "il.h"
 extern "C" {
-    #include "xedInc/xed-interface.h"
+    #include "xed-interface.h"
 }
 #include "arch_x86_common_architecture.h"
-#include "x86_intrinsic_cached_types.include"
 
 using namespace BinaryNinja;
 using namespace std;
@@ -5191,4 +5190,35 @@ vector<Confidence<Ref<Type>>> X86CommonArchitecture::GetIntrinsicOutputs(uint32_
     default:
         return vector<Confidence<Ref<Type>>>();
     }
+}
+
+
+#ifdef __APPLE__
+// clang is very slow at optimizing this function. Optimizations have nearly zero
+// impact on initialization time, so just turn them off.
+void X86CommonArchitecture::InitializeCachedInputTypes() __attribute__((optnone))
+#else
+void X86CommonArchitecture::InitializeCachedInputTypes()
+#endif
+{
+#include "x86_intrinsic_cached_input_types.include"
+}
+
+
+#ifdef __APPLE__
+// clang is very slow at optimizing this function. Optimizations have nearly zero
+// impact on initialization time, so just turn them off.
+void X86CommonArchitecture::InitializeCachedOutputTypes() __attribute__((optnone))
+#else
+void X86CommonArchitecture::InitializeCachedOutputTypes()
+#endif
+{
+#include "x86_intrinsic_cached_output_types.include"
+}
+
+
+void X86CommonArchitecture::InitializeCachedTypes()
+{
+    X86CommonArchitecture::InitializeCachedInputTypes();
+    X86CommonArchitecture::InitializeCachedOutputTypes();
 }
